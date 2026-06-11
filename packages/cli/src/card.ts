@@ -23,7 +23,7 @@ const ACCENT = "#4ade80";
 const BG = "#101312";
 const PANEL = "#181c1a";
 
-function stat(label: string, value: string, sub?: string): Node {
+function stat(label: string, value: string, sub?: string, valueSize = 30): Node {
   return h(
     "div",
     {
@@ -31,13 +31,19 @@ function stat(label: string, value: string, sub?: string): Node {
       flexDirection: "column",
       backgroundColor: PANEL,
       borderRadius: 12,
-      padding: "18px 22px",
+      padding: "16px 22px",
       flexGrow: 1,
       flexBasis: 0,
+      height: 112,
+      overflow: "hidden",
     },
-    h("div", { display: "flex", fontSize: 19, color: DIM }, label),
-    h("div", { display: "flex", fontSize: 36, fontWeight: 800, color: INK, marginTop: 6 }, value),
-    ...(sub ? [h("div", { display: "flex", fontSize: 17, color: DIM, marginTop: 2 }, sub)] : []),
+    h("div", { display: "flex", fontSize: 17, color: DIM }, label),
+    h(
+      "div",
+      { display: "flex", fontSize: valueSize, fontWeight: 800, color: INK, marginTop: 6, lineHeight: 1.2 },
+      value,
+    ),
+    ...(sub ? [h("div", { display: "flex", fontSize: 15, color: DIM, marginTop: 2 }, sub)] : []),
   );
 }
 
@@ -46,7 +52,7 @@ export async function renderCardSvg(metrics: Metrics): Promise<string> {
   const { output, delivery, activity, tools, tokens, source } = metrics;
   const since = source.dateRange[0]?.slice(0, 10) ?? "—";
   const until = source.dateRange[1]?.slice(0, 10) ?? "—";
-  const topLangs = output.byLanguage.slice(0, 3).map((l) => `${l.lang} ${formatCount(l.linesAdded)}`).join("  ·  ") || "—";
+  const topLangs = output.byLanguage.slice(0, 3).map((l) => `${l.lang} ${formatCount(l.linesAdded)}`).join(" · ") || "—";
   const topTool = tools.builtin[0];
   const totalTokens = tokens.input + tokens.output + tokens.cacheRead + tokens.cacheCreation;
 
@@ -59,44 +65,44 @@ export async function renderCardSvg(metrics: Metrics): Promise<string> {
       height: "100%",
       backgroundColor: BG,
       color: INK,
-      padding: "44px 52px",
+      padding: "36px 48px",
       fontFamily: "JetBrains Mono",
     },
     // header
     h(
       "div",
-      { display: "flex", justifyContent: "space-between", alignItems: "baseline" },
-      h("div", { display: "flex", fontSize: 30, fontWeight: 800 }, "trackrecord"),
-      h("div", { display: "flex", fontSize: 22, color: DIM }, `${since} → ${until}`),
+      { display: "flex", justifyContent: "space-between", alignItems: "baseline", height: 38 },
+      h("div", { display: "flex", fontSize: 28, fontWeight: 800 }, "trackrecord"),
+      h("div", { display: "flex", fontSize: 20, color: DIM }, `${since} → ${until}`),
     ),
     // heroes
     h(
       "div",
-      { display: "flex", gap: 28, marginTop: 30 },
+      { display: "flex", gap: 24, marginTop: 20 },
       h(
         "div",
-        { display: "flex", flexDirection: "column", flexGrow: 2, flexBasis: 0, backgroundColor: PANEL, borderRadius: 16, padding: "26px 32px" },
-        h("div", { display: "flex", fontSize: 22, color: DIM }, "lines of code added"),
-        h("div", { display: "flex", fontSize: 96, fontWeight: 800, color: ACCENT, lineHeight: 1.05 }, formatCount(output.linesAdded.code)),
+        { display: "flex", flexDirection: "column", flexGrow: 2, flexBasis: 0, backgroundColor: PANEL, borderRadius: 16, padding: "20px 30px", height: 158, overflow: "hidden" },
+        h("div", { display: "flex", fontSize: 20, color: DIM }, "lines of code added"),
+        h("div", { display: "flex", fontSize: 80, fontWeight: 800, color: ACCENT, lineHeight: 1.1 }, formatCount(output.linesAdded.code)),
       ),
       h(
         "div",
-        { display: "flex", flexDirection: "column", flexGrow: 1, flexBasis: 0, backgroundColor: PANEL, borderRadius: 16, padding: "26px 32px" },
-        h("div", { display: "flex", fontSize: 22, color: DIM }, "PRs shipped"),
-        h("div", { display: "flex", fontSize: 96, fontWeight: 800, lineHeight: 1.05 }, formatCount(delivery.pullRequests)),
+        { display: "flex", flexDirection: "column", flexGrow: 1, flexBasis: 0, backgroundColor: PANEL, borderRadius: 16, padding: "20px 30px", height: 158, overflow: "hidden" },
+        h("div", { display: "flex", fontSize: 20, color: DIM }, "PRs shipped"),
+        h("div", { display: "flex", fontSize: 80, fontWeight: 800, lineHeight: 1.1 }, formatCount(delivery.pullRequests)),
       ),
     ),
-    // stat grid
+    // stat grid — fixed heights so nothing can push the footer off-canvas
     h(
       "div",
-      { display: "flex", gap: 18, marginTop: 22 },
-      stat("top languages", topLangs),
+      { display: "flex", gap: 16, marginTop: 16 },
+      stat("top languages", topLangs, undefined, 21),
       stat("sessions", `${formatCount(activity.sessions)}`, `${activity.activeDays} active days`),
-      stat("longest streak", `${activity.longestStreak}d`),
+      stat("longest streak", `${activity.longestStreak}d`, activity.currentStreak > 0 ? `current ${activity.currentStreak}d` : undefined),
     ),
     h(
       "div",
-      { display: "flex", gap: 18, marginTop: 18 },
+      { display: "flex", gap: 16, marginTop: 14 },
       stat("top tool", topTool ? `${topTool.name}` : "—", topTool ? `×${formatCount(topTool.count)}` : undefined),
       stat("context ceiling hit", `${formatCount(activity.compactions)}×`),
       stat("total tokens", formatCount(totalTokens)),
@@ -104,9 +110,9 @@ export async function renderCardSvg(metrics: Metrics): Promise<string> {
     // footer
     h(
       "div",
-      { display: "flex", justifyContent: "space-between", marginTop: "auto", paddingTop: 18 },
-      h("div", { display: "flex", fontSize: 19, color: DIM }, "built with Claude Code"),
-      h("div", { display: "flex", fontSize: 19, color: DIM }, "trackrecord · zero network calls"),
+      { display: "flex", justifyContent: "space-between", marginTop: "auto", paddingTop: 12 },
+      h("div", { display: "flex", fontSize: 17, color: DIM }, "built with Claude Code"),
+      h("div", { display: "flex", fontSize: 17, color: DIM }, "trackrecord · zero network calls"),
     ),
   );
 
