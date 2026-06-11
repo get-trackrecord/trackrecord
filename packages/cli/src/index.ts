@@ -52,9 +52,12 @@ program
     if (notice) process.stdout.write(`\n${notice}\n`);
   });
 
+// Card is internal until launch: hidden for npm users (its render deps are
+// devDependencies and don't ship), available in-repo via the env flag.
+if (process.env.TRACKRECORD_INTERNAL === "1") {
 program
   .command("card")
-  .description("render the shareable ship card PNG")
+  .description("render the shareable ship card PNG (internal until launch)")
   .option("--dir <path>", "override the projects directory", DEFAULT_DIR)
   .option("--since <date>", "only count activity since YYYY-MM-DD")
   .option("--range <range>", "only count activity in YYYY-MM-DD..YYYY-MM-DD")
@@ -71,6 +74,7 @@ program
     const notice = retentionNotice(metrics);
     if (notice) process.stderr.write(`${notice}\n`);
   });
+}
 
 program
   .command("doctor")

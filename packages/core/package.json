@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Pure analysis core for trackrecord: Claude Code JSONL logs in, metrics schema out. Zero network calls.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/benjaminwolf36/trackrecord.git"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

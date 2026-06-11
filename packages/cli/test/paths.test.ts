@@ -12,7 +12,10 @@ const FIXTURES = resolve(__dirname, "../../../fixtures/projects");
 
 async function cli(...args: string[]) {
   try {
-    const r = await run(process.execPath, [BIN, ...args]);
+    // TRACKRECORD_INTERNAL exposes the card command (hidden until launch)
+    const r = await run(process.execPath, [BIN, ...args], {
+      env: { ...process.env, TRACKRECORD_INTERNAL: "1" },
+    });
     return { code: 0, ...r };
   } catch (e) {
     const err = e as { code?: number; stdout: string; stderr: string };
@@ -35,6 +38,15 @@ describe("--dir handling", () => {
       expect(r.code).toBe(1);
       expect(r.stderr).toContain("directory not found");
     }
+  });
+
+  it("card is hidden without TRACKRECORD_INTERNAL (internal until launch)", async () => {
+    // plain spawn, no env flag — what an npm user gets
+    const r = await run(process.execPath, [BIN, "--help"], {
+      env: { ...process.env, TRACKRECORD_INTERNAL: "" },
+    });
+    expect(r.stdout).toContain("doctor");
+    expect(r.stdout).not.toContain("card");
   });
 
   it("empty dir: valid empty corpus, zeros, exit 0", async () => {
