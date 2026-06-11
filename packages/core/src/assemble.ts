@@ -15,6 +15,10 @@ export interface AnalyzeOptions {
   dir: string;
   /** Injectable clock for deterministic tests; defaults to the real now. */
   now?: Date;
+  /** Only count records timestamped on/after this instant (card --since/--range). */
+  since?: Date;
+  /** Only count records timestamped on/before this instant. */
+  until?: Date;
 }
 
 interface ToolEvent {
@@ -80,6 +84,13 @@ export async function analyze(options: AnalyzeOptions): Promise<Metrics> {
       records += 1;
       const record = classifyRecord(raw, warnings);
       if (!record) continue;
+      if (options.since !== undefined || options.until !== undefined) {
+        const ts = typeof record.timestamp === "string" ? Date.parse(record.timestamp) : NaN;
+        if (!Number.isNaN(ts)) {
+          if (options.since !== undefined && ts < options.since.getTime()) continue;
+          if (options.until !== undefined && ts > options.until.getTime()) continue;
+        }
+      }
 
       const version = record.version;
       if (typeof version === "string" && version.length > 0) {

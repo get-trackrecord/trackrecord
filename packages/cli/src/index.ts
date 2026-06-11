@@ -32,6 +32,26 @@ program
   });
 
 program
+  .command("card")
+  .description("render the shareable ship card PNG")
+  .option("--dir <path>", "override the projects directory", DEFAULT_DIR)
+  .option("--since <date>", "only count activity since YYYY-MM-DD")
+  .option("--range <range>", "only count activity in YYYY-MM-DD..YYYY-MM-DD")
+  .option("--out <path>", "output path", "./trackrecord-card.png")
+  .action(async (opts: { dir: string; since?: string; range?: string; out: string }) => {
+    const { parseDateOptions, renderCardPng } = await import("./card.js");
+    const { writeFile } = await import("node:fs/promises");
+    const { resolve } = await import("node:path");
+    const metrics = await analyze({ dir: opts.dir, ...parseDateOptions(opts) });
+    const png = await renderCardPng(metrics);
+    const out = resolve(opts.out);
+    await writeFile(out, png);
+    process.stdout.write(`${out}\n`);
+    const notice = retentionNotice(metrics);
+    if (notice) process.stderr.write(`${notice}\n`);
+  });
+
+program
   .command("doctor")
   .description("anonymized corpus structure survey — paste into a GitHub issue")
   .option("--dir <path>", "override the projects directory", DEFAULT_DIR)
