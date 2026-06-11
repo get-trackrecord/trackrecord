@@ -21,9 +21,10 @@ const extreme = {
     linesAdded: buckets(987654321), linesRemoved: buckets(123456789),
     grossLinesWritten: 9999999999, filesTouched: 999999, filesCreated: 888888,
     byLanguage: [
-      { lang: "javascriptreact", linesAdded: 987654321, files: 9999 },
-      { lang: "typescriptreact", linesAdded: 876543210, files: 8888 },
-      { lang: "markdown", linesAdded: 765432109, files: 7777 },
+      { lang: "md", linesAdded: 999999999, files: 9999 }, // docs bucket — must NOT render
+      { lang: "svelte", linesAdded: 987654321, files: 9999 },
+      { lang: "tsx", linesAdded: 876543210, files: 8888 },
+      { lang: "ts", linesAdded: 765432109, files: 7777 },
     ],
     byProject: [{ project: "a-very-long-monorepo-project-name-30", linesAdded: 987654321, sessions: 99 }],
     writes: 99999, edits: 99999, multiEdits: 9999, notebookEdits: 999,

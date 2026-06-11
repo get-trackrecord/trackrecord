@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolve } from "node:path";
 import { analyze } from "@trackrecord/core";
-import { parseDateOptions, renderCardPng, renderCardSvg } from "../src/card.js";
+import { displayToolName, parseDateOptions, renderCardPng, renderCardSvg, topLanguagesLine } from "../src/card.js";
 import { NOW_FOR_TESTS } from "../../../fixtures/manifest.js";
 
 const FIXTURES = resolve(__dirname, "../../../fixtures/projects");
@@ -42,5 +42,25 @@ describe("trackrecord card", () => {
 
   it("rejects malformed ranges", () => {
     expect(() => parseDateOptions({ range: "2026-06-01" })).toThrow(/expected/);
+  });
+
+  it("top languages shows code-bucket languages only — card must sum within the hero", async () => {
+    const metrics = await analyze({ dir: FIXTURES, now: new Date(NOW_FOR_TESTS) });
+    const line = topLanguagesLine(metrics.output.byLanguage);
+    // fixture corpus has md (docs) and css (styles) lines — neither may appear
+    // on the card's top-languages line; full breakdown stays in --json
+    expect(line).not.toMatch(/\bmd\b/);
+    expect(line).not.toMatch(/\bcss\b/);
+    expect(line).toMatch(/\bts\b/);
+    expect(metrics.output.byLanguage.some((l) => l.lang === "md")).toBe(true); // still in --json
+    // and a corpus with NO code-bucket languages degrades to a dash
+    expect(topLanguagesLine([{ lang: "md", linesAdded: 5, files: 1 }])).toBe("—");
+  });
+
+  it("MCP tool names display as suffix (MCP), never the redacted prefix form", () => {
+    expect(displayToolName("mcp__<redacted>__execute_sql", 16)).toBe("execute_sql (MCP)");
+    expect(displayToolName("mcp__<redacted>__execute_file_with_long_name", 16)).toBe("execute_fi… (MCP)");
+    expect(displayToolName("Bash", 16)).toBe("Bash");
+    expect(displayToolName("mcp__<redacted>__execute_sql", 16)).not.toContain("redacted");
   });
 });

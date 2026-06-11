@@ -29,6 +29,11 @@ export function extensionOf(filePath: string): string {
   return i > 0 ? base.slice(i + 1).toLowerCase() : "";
 }
 
+/** Pure lookup for display layers: is this extension in the code bucket? */
+export function isCodeExt(ext: string): boolean {
+  return CODE.has(ext);
+}
+
 /**
  * Spec rule 6. Generated wins over everything (lockfiles, *.min.*, build
  * output paths); unknown extensions land in config and tally a warning the

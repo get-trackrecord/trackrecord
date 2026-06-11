@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
-import type { Metrics } from "@trackrecord/core";
+import { isCodeExt, type Metrics } from "@trackrecord/core";
 import { formatCount, truncate } from "./summary.js";
 
 const WIDTH = 1200;
@@ -23,7 +23,7 @@ const ACCENT = "#4ade80";
 const BG = "#101312";
 const PANEL = "#181c1a";
 
-function stat(label: string, value: string, sub?: string, valueSize = 30): Node {
+function stat(label: string, value: string, sub?: string, valueSize = 30, nowrap = false): Node {
   return h(
     "div",
     {
@@ -40,11 +40,37 @@ function stat(label: string, value: string, sub?: string, valueSize = 30): Node 
     h("div", { display: "flex", fontSize: 17, color: DIM }, label),
     h(
       "div",
-      { display: "flex", fontSize: valueSize, fontWeight: 800, color: INK, marginTop: 6, lineHeight: 1.2 },
+      { display: "flex", fontSize: valueSize, fontWeight: 800, color: INK, marginTop: 6, lineHeight: 1.2, ...(nowrap ? { whiteSpace: "nowrap" } : {}) },
       value,
     ),
     ...(sub ? [h("div", { display: "flex", fontSize: 15, color: DIM, marginTop: 2 }, sub)] : []),
   );
+}
+
+/**
+ * Card top-languages line: code-bucket languages only, so everything visible
+ * on the card sums within the hero (linesAdded.code). Full all-bucket
+ * breakdown stays in summary/--json.
+ */
+export function topLanguagesLine(byLanguage: Metrics["output"]["byLanguage"]): string {
+  return (
+    byLanguage
+      .filter((l) => isCodeExt(l.lang))
+      .slice(0, 3)
+      .map((l) => `${l.lang} ${formatCount(l.linesAdded)}`)
+      .join(" · ") || "—"
+  );
+}
+
+/**
+ * Share-surface tool names: MCP tools show as "suffix (MCP)" — the
+ * mcp__<redacted>__ prefix form is for doctor/--json, not the card.
+ */
+export function displayToolName(name: string, max: number): string {
+  // suffix budget keeps the whole line ≤ max+1 chars — one panel line, no wrap
+  const suffix = name.match(/^mcp__<redacted>__(.+)$/)?.[1];
+  if (suffix !== undefined) return `${truncate(suffix, max - 5)} (MCP)`;
+  return truncate(name, max);
 }
 
 /** The eight spec stats on a 1200x630 og-image card. */
@@ -52,7 +78,7 @@ export async function renderCardSvg(metrics: Metrics): Promise<string> {
   const { output, delivery, activity, tools, tokens, source } = metrics;
   const since = source.dateRange[0]?.slice(0, 10) ?? "—";
   const until = source.dateRange[1]?.slice(0, 10) ?? "—";
-  const topLangs = output.byLanguage.slice(0, 3).map((l) => `${l.lang} ${formatCount(l.linesAdded)}`).join(" · ") || "—";
+  const topLangs = topLanguagesLine(output.byLanguage);
   const topTool = tools.builtin[0];
   const totalTokens = tokens.input + tokens.output + tokens.cacheRead + tokens.cacheCreation;
 
@@ -103,7 +129,7 @@ export async function renderCardSvg(metrics: Metrics): Promise<string> {
     h(
       "div",
       { display: "flex", gap: 16, marginTop: 14 },
-      stat("top tool", topTool ? truncate(topTool.name, 16) : "—", topTool ? `×${formatCount(topTool.count)}` : undefined),
+      stat("top tool", topTool ? displayToolName(topTool.name, 16) : "—", topTool ? `×${formatCount(topTool.count)}` : undefined, 30, true),
       stat("context ceiling hit", `${formatCount(activity.compactions)}×`),
       stat("total tokens", formatCount(totalTokens)),
     ),
