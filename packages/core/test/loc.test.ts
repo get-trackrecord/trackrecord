@@ -121,6 +121,31 @@ describe("LocEngine counting rules", () => {
     ]);
   });
 
+  it("does NOT warn on allowlisted non-writers (ExitPlanMode)", () => {
+    const { eng, warnings } = engine();
+    // Real ExitPlanMode shape: planFilePath matches /file/, plan is a big multiline string.
+    const plan = ("- do the thing\n").repeat(50);
+    eng.applyToolUse("ExitPlanMode", { plan, planFilePath: "/p/PLAN.md", allowedPrompts: [] }, CTX);
+    expect(eng.result(new Map()).linesAdded.total).toBe(0);
+    expect(warnings.get("suspectedWriteTool")).toEqual([]);
+  });
+
+  it("does NOT warn on MCP tools — out of scope by spec, never counted", () => {
+    const { eng, warnings } = engine();
+    const content = ("export const x = 1;\n").repeat(40);
+    eng.applyToolUse("mcp__some-server__ctx_execute_file", { file_path: "/p/gen.ts", content }, CTX);
+    expect(warnings.get("suspectedWriteTool")).toEqual([]);
+  });
+
+  it("STILL warns on an unknown non-MCP write-shaped tool (allowlist is the only escape)", () => {
+    const { eng, warnings } = engine();
+    const blob = ("line\n").repeat(200);
+    eng.applyToolUse("MysteryWriter", { target_file: "/p/a.ts", body: blob }, CTX);
+    expect(warnings.get("suspectedWriteTool")).toEqual([
+      { kind: "suspectedWriteTool", tool: "MysteryWriter", count: 1 },
+    ]);
+  });
+
   it("aggregates byLanguage and byProject", () => {
     const { eng } = engine();
     eng.applyToolUse("Write", { file_path: "/p/a.ts", content: "1\n2\n3" }, { project: "alpha" });

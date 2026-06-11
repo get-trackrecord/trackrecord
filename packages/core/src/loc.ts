@@ -5,6 +5,20 @@ import type { WarningCollector } from "./warnings.js";
 /** The only four tools whose output is ever counted (spec scope statement). */
 export const COUNTED_WRITERS = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
 
+/**
+ * Known non-writer tools exempt from the suspect-writer heuristic. The heuristic
+ * itself stays paranoid (detect any path-key + big-string shape); this allowlist is
+ * the ONLY escape hatch. Each entry provably trips the shape but never writes files —
+ * without the exemption every affected user sees a warning, which trains them to
+ * ignore it.
+ */
+export const SUSPECT_WRITER_ALLOWLIST = new Set([
+  // ExitPlanMode input is { plan (long multiline text), planFilePath, allowedPrompts };
+  // planFilePath matches /file/ and plan is a >500-char multiline string, so it trips
+  // the heuristic — but it only presents a plan for approval, never touching the disk.
+  "ExitPlanMode",
+]);
+
 export interface LineBuckets {
   code: number;
   docs: number;
@@ -191,6 +205,11 @@ export class LocEngine {
 
   /** Spec suspect-writer heuristic: detect and warn ONLY, never count. */
   private inspectSuspect(name: string, inp: Record<string, unknown>): void {
+    if (SUSPECT_WRITER_ALLOWLIST.has(name)) return;
+    // MCP tools are out of scope by the spec's scope statement — code written via MCP is
+    // deliberately not counted, so a write-shaped MCP call is working as designed, not an
+    // anomaly worth flagging. (mcp__<uuid> names also vary per user, so naming them is futile.)
+    if (name.startsWith("mcp__")) return;
     const values = Object.entries(inp);
     const hasPathKey = values.some(([k, v]) => /path|file/i.test(k) && typeof v === "string");
     const hasBigString = Object.values(inp).some(
