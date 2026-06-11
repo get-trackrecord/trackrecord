@@ -1,0 +1,28 @@
+{
+  "name": "@trackrecord/cli",
+  "version": "0.1.0",
+  "description": "Your Claude Code track record — local, honest, free. Zero network calls.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "trackrecord": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@trackrecord/core": "workspace:*",
+    "commander": "^15.0.0",
+    "picocolors": "^1.1.1",
+    "satori": "^0.26.0"
+  }
+}
