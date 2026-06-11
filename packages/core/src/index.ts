@@ -7,3 +7,4 @@ export type { ToolsMetrics } from "./tools.js";
 export type { TokenMetrics } from "./tokens.js";
 export type { ParserWarning, WarningKind } from "./warnings.js";
 export { discoverFiles } from "./reader.js";
+export { survey, type Survey } from "./survey.js";

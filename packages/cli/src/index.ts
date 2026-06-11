@@ -1,7 +1,8 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Command } from "commander";
-import { analyze } from "@trackrecord/core";
+import { analyze, survey } from "@trackrecord/core";
+import { renderDoctor } from "./doctor.js";
 import { renderSummary, suspectWriterWarnings } from "./summary.js";
 import { retentionNotice } from "./retention.js";
 
@@ -28,6 +29,15 @@ program
       process.stdout.write(`${warning}\n`);
     }
     if (notice) process.stdout.write(`\n${notice}\n`);
+  });
+
+program
+  .command("doctor")
+  .description("anonymized corpus structure survey — paste into a GitHub issue")
+  .option("--dir <path>", "override the projects directory", DEFAULT_DIR)
+  .action(async (opts: { dir: string }) => {
+    const s = await survey(opts.dir);
+    process.stdout.write(`${renderDoctor(s)}\n`);
   });
 
 program.parseAsync().catch((err: unknown) => {
