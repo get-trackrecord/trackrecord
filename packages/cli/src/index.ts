@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Command } from "commander";
@@ -8,7 +9,27 @@ import { retentionNotice } from "./retention.js";
 
 const DEFAULT_DIR = join(homedir(), ".claude", "projects");
 
+/** A typo'd --dir must be a clear error, never a silently-empty report. */
+function requireDir(dir: string): string {
+  if (!existsSync(dir)) {
+    process.stderr.write(
+      `trackrecord: directory not found: ${dir}\n` +
+        (dir === DEFAULT_DIR
+          ? "No Claude Code logs here yet — has Claude Code run on this machine?\n"
+          : "Check the --dir path.\n"),
+    );
+    process.exit(1);
+  }
+  return dir;
+}
+
 const program = new Command();
+
+// Without this, the root command's --dir greedily claims "--dir X" even when
+// it appears after a subcommand, so `trackrecord card --dir X` silently ran
+// against the DEFAULT directory. Positional parsing scopes options to the
+// command they follow.
+program.enablePositionalOptions();
 
 program
   .name("trackrecord")
@@ -16,7 +37,7 @@ program
   .option("--json", "emit the full schema object to stdout")
   .option("--dir <path>", "override the projects directory", DEFAULT_DIR)
   .action(async (opts: { json?: boolean; dir: string }) => {
-    const metrics = await analyze({ dir: opts.dir });
+    const metrics = await analyze({ dir: requireDir(opts.dir) });
     const notice = retentionNotice(metrics);
     if (opts.json) {
       // stdout carries ONLY the schema object; notices go to stderr
@@ -42,7 +63,7 @@ program
     const { parseDateOptions, renderCardPng } = await import("./card.js");
     const { writeFile } = await import("node:fs/promises");
     const { resolve } = await import("node:path");
-    const metrics = await analyze({ dir: opts.dir, ...parseDateOptions(opts) });
+    const metrics = await analyze({ dir: requireDir(opts.dir), ...parseDateOptions(opts) });
     const png = await renderCardPng(metrics);
     const out = resolve(opts.out);
     await writeFile(out, png);
@@ -56,7 +77,7 @@ program
   .description("anonymized corpus structure survey — paste into a GitHub issue")
   .option("--dir <path>", "override the projects directory", DEFAULT_DIR)
   .action(async (opts: { dir: string }) => {
-    const s = await survey(opts.dir);
+    const s = await survey(requireDir(opts.dir));
     process.stdout.write(`${renderDoctor(s)}\n`);
   });
 
