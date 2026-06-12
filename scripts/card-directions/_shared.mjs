@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { analyze, isCodeExt } from "../../packages/core/dist/index.js";
 
@@ -112,5 +112,6 @@ export async function renderToPng(tree, fonts, outPath, pixelWidth = WIDTH) {
   const svg = await satori(tree, { width: WIDTH, height: HEIGHT, fonts });
   const png = new Resvg(svg, { fitTo: { mode: "width", value: pixelWidth } }).render().asPng();
   writeFileSync(outPath, Buffer.from(png));
-  return outPath;
+  // full path, never relative — callers print it on its own line for click-to-view
+  return resolve(outPath);
 }

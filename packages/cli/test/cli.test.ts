@@ -30,9 +30,15 @@ describe("summary view", () => {
     const m = await metrics();
     const text = renderSummary(m);
     expect(text).toContain("since 2026-06-01");
-    expect(text).toContain("Lines of code added");
+    expect(text).toContain("LINES OF CODE ADDED");
     expect(text).toContain("zero network calls");
     expect(text).not.toContain("this year");
+    // box card: every line has the same printable width, borders intact
+    const plain = text.replace(/\[[0-9;]*m/g, "");
+    const widths = new Set(plain.split("\n").map((l) => l.length));
+    expect(widths.size).toBe(1);
+    expect(plain.startsWith("┌")).toBe(true);
+    expect(plain.endsWith("┘")).toBe(true);
   });
 
   it("prints the suspect-writer warning line per spec", async () => {

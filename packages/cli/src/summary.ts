@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import type { Metrics } from "@trackrecord/core";
+import { isCodeExt, type Metrics } from "@trackrecord/core";
 
 export function formatCount(n: number): string {
   if (n < 10_000) return n.toLocaleString("en-US");
@@ -28,60 +28,97 @@ export function suspectWriterWarnings(metrics: Metrics): string[] {
     );
 }
 
-/** Pretty, compact terminal summary. Framing is always "since <first-log date>". */
+/** Inner width of the text card. Fixed so the card prints deterministically everywhere. */
+const W = 58;
+
+type Paint = (s: string) => string;
+const id: Paint = (s) => s;
+
+/** One bordered card row. Padding is computed on PLAIN text; color applied after. */
+function row(left: string, right = "", paintL: Paint = id, paintR: Paint = id): string {
+  const reserve = right ? right.length + 2 : 0;
+  const l = left.length + reserve > W ? truncate(left, W - reserve) : left;
+  const gap = " ".repeat(W - l.length - right.length);
+  return `│ ${paintL(l)}${gap}${paintR(right)} │`;
+}
+
+const TOP = `┌${"─".repeat(W + 2)}┐`;
+const MID = `├${"─".repeat(W + 2)}┤`;
+const BOT = `└${"─".repeat(W + 2)}┘`;
+
+/** Share-surface tool names: MCP tools read as "suffix (MCP)". */
+function displayTool(name: string, max: number): string {
+  const suffix = name.match(/^mcp__<redacted>__(.+)$/)?.[1];
+  if (suffix !== undefined) return `${truncate(suffix, max - 5)} (MCP)`;
+  return truncate(name, max);
+}
+
+/**
+ * The text card — the baseline experience for every terminal. Card-shaped:
+ * masthead, hero LOC + PRs, ledger rows. Framing is always
+ * "since <first-log date>", never "this year".
+ */
 export function renderSummary(metrics: Metrics): string {
   const { output, delivery, activity, tools, tokens, source } = metrics;
   const since = source.dateRange[0]?.slice(0, 10) ?? "—";
   const until = source.dateRange[1]?.slice(0, 10) ?? "—";
 
-  const label = (s: string) => pc.dim(s.padEnd(22));
   const hero = (s: string) => pc.bold(pc.green(s));
-  const lines: string[] = [];
+  const dim: Paint = (s) => pc.dim(s);
+  const bold: Paint = (s) => pc.bold(s);
 
-  lines.push(pc.bold("trackrecord") + pc.dim(" — your Claude Code track record"));
-  lines.push(pc.dim(`since ${since} (through ${until})`));
-  lines.push("");
-  lines.push(
-    `  ${label("Lines of code added")}${hero(formatCount(output.linesAdded.code))}` +
-      pc.dim(
-        `   (+${formatCount(output.linesAdded.docs)} docs, +${formatCount(output.linesAdded.config)} config, ` +
-          `+${formatCount(output.linesAdded.styles)} styles · generated excluded)`,
-      ),
-  );
-  lines.push(`  ${label("Lines removed")}${formatCount(output.linesRemoved.total)}`);
-  lines.push(
-    `  ${label("Files")}${formatCount(output.filesTouched)} touched, ${formatCount(output.filesCreated)} created`,
-  );
-  lines.push(
-    `  ${label("PRs shipped")}${pc.bold(formatCount(delivery.pullRequests))}` +
-      pc.dim(` across ${delivery.repositories} repos · ${delivery.branches} branches`),
-  );
-  lines.push(
-    `  ${label("Sessions")}${formatCount(activity.sessions)}` +
-      pc.dim(
-        ` over ${activity.activeDays} active days · longest streak ${activity.longestStreak}` +
-          (activity.currentStreak > 0 ? ` · current ${activity.currentStreak}` : ""),
-      ),
-  );
-  if (activity.subagentRuns > 0) {
-    lines.push(`  ${label("Subagent runs")}${formatCount(activity.subagentRuns)}`);
-  }
-  const topLangs = output.byLanguage.slice(0, 3).map((l) => `${l.lang} ${formatCount(l.linesAdded)}`);
-  if (topLangs.length > 0) lines.push(`  ${label("Top languages")}${topLangs.join(pc.dim(" · "))}`);
+  const ledger = (label: string, value: string, sub = "") =>
+    row(label.padEnd(17) + value, sub, (s) => pc.dim(s.slice(0, 17)) + pc.bold(s.slice(17)), dim);
+
+  // code-bucket only: everything on the card sums within the hero (docs shown in its sub-line)
+  const topLangs =
+    output.byLanguage
+      .filter((l) => isCodeExt(l.lang))
+      .slice(0, 3)
+      .map((l) => `${l.lang} ${formatCount(l.linesAdded)}`)
+      .join(" · ") || "—";
   const topTool = tools.builtin[0];
-  if (topTool) lines.push(`  ${label("Top tool")}${topTool.name} ×${formatCount(topTool.count)}`);
-  if (activity.compactions > 0) {
-    lines.push(
-      `  ${label("Compactions")}${formatCount(activity.compactions)}` +
-        pc.dim(" (hit the context ceiling)"),
-    );
-  }
   const totalTokens = tokens.input + tokens.output + tokens.cacheRead + tokens.cacheCreation;
-  lines.push(
-    `  ${label("Tokens")}${formatCount(totalTokens)}` +
-      pc.dim(` total · API-equivalent value $${tokens.apiEquivalentUsd.toFixed(2)}`),
-  );
-  lines.push("");
-  lines.push(pc.dim("zero network calls — this tool never touches the network. Verify the source."));
+
+  const lines: string[] = [
+    TOP,
+    row("TRACKRECORD", `since ${since} → ${until}`, bold, dim),
+    row("THE RECORD BOOK · A LEDGER OF SHIPPED WORK", "", dim),
+    MID,
+    row("LINES OF CODE ADDED", "PULL REQUESTS SHIPPED", dim, dim),
+    row(formatCount(output.linesAdded.code), formatCount(delivery.pullRequests), hero, bold),
+    row(
+      `+${formatCount(output.linesAdded.docs)} docs · ${formatCount(output.linesRemoved.total)} removed`,
+      `across ${delivery.repositories} repos`,
+      dim,
+      dim,
+    ),
+    MID,
+    ledger("top languages", truncate(topLangs, 39)),
+    ledger(
+      "sessions",
+      formatCount(activity.sessions),
+      `${activity.activeDays} active days`,
+    ),
+    ledger(
+      "longest streak",
+      `${activity.longestStreak}d`,
+      activity.currentStreak > 0 ? `current ${activity.currentStreak}d` : "",
+    ),
+    ledger(
+      "top tool",
+      topTool ? displayTool(topTool.name, 20) : "—",
+      topTool ? `×${formatCount(topTool.count)}` : "",
+    ),
+    ledger("context ceiling", `${formatCount(activity.compactions)}× hit`),
+    ledger(
+      "total tokens",
+      formatCount(totalTokens),
+      `$${tokens.apiEquivalentUsd.toFixed(2)} API-equiv`,
+    ),
+    MID,
+    row("built with Claude Code", "zero network calls", dim, dim),
+    BOT,
+  ];
   return lines.join("\n");
 }
