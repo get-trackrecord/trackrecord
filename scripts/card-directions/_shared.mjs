@@ -108,9 +108,9 @@ export const EXTREME = {
   git: { reserved: true },
 };
 
-export async function renderToPng(tree, fonts, outPath) {
+export async function renderToPng(tree, fonts, outPath, pixelWidth = WIDTH) {
   const svg = await satori(tree, { width: WIDTH, height: HEIGHT, fonts });
-  const png = new Resvg(svg, { fitTo: { mode: "width", value: WIDTH } }).render().asPng();
+  const png = new Resvg(svg, { fitTo: { mode: "width", value: pixelWidth } }).render().asPng();
   writeFileSync(outPath, Buffer.from(png));
   return outPath;
 }
