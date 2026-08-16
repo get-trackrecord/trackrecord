@@ -1,4 +1,5 @@
 import { basename } from "node:path";
+import { AcceptanceEngine } from "./acceptance.js";
 import { classifyRecord } from "./classify.js";
 import { DeliveryEngine } from "./delivery.js";
 import { LocEngine, COUNTED_WRITERS } from "./loc.js";
@@ -88,6 +89,7 @@ export async function analyze(options: AnalyzeOptions): Promise<Metrics> {
   const warnings = new WarningCollector();
   const sessions = new SessionEngine();
   const delivery = new DeliveryEngine();
+  const acceptance = new AcceptanceEngine();
   const tools = new ToolsEngine();
   const tokens = new TokensEngine();
   const loc = new LocEngine(warnings);
@@ -139,11 +141,13 @@ export async function analyze(options: AnalyzeOptions): Promise<Metrics> {
 
       sessions.addRecord(record);
       delivery.addRecord(record, file.isAgent);
+      acceptance.addRecord(record);
       tokens.addAssistant(record);
 
       const project = basename(typeof record.cwd === "string" && record.cwd ? record.cwd : "unknown");
       for (const { name, input } of toolUses(record)) {
         tools.addToolUse(name);
+        delivery.addToolUse(name, input);
         if (COUNTED_WRITERS.has(name)) {
           locEvents.push({ name, input, timestamp: typeof timestamp === "string" ? timestamp : "", project });
         } else {
@@ -170,7 +174,7 @@ export async function analyze(options: AnalyzeOptions): Promise<Metrics> {
     output: redactProjects(loc.result(sessions.projectSessions()), options.showProjectNames === true),
     delivery: delivery.result(),
     activity: sessions.result(now),
-    tools: tools.result(),
+    tools: { ...tools.result(), editActions: acceptance.result() },
     tokens: tokens.result(),
     git: { reserved: true },
   };

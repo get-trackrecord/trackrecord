@@ -5,7 +5,7 @@ import type { DeliveryMetrics } from "./delivery.js";
 import type { ToolsMetrics } from "./tools.js";
 import type { TokenMetrics } from "./tokens.js";
 
-export const SCHEMA_VERSION = "1.0.0";
+export const SCHEMA_VERSION = "1.1.0";
 
 /** The schema v1.0.0 contract. Additive changes bump minor, breaking bump major. */
 export interface Metrics {

@@ -1,5 +1,16 @@
 import pricingTable from "../pricing/2026-06.json" with { type: "json" };
+import { safeModelName } from "./sanitize.js";
 import type { RawRecord } from "./types.js";
+
+/** Per-model usage, mirroring the Claude Code Analytics API's model_breakdown. */
+export interface ModelTokenUsage {
+  model: string;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheCreation: number;
+  apiEquivalentUsd: number;
+}
 
 export interface TokenMetrics {
   input: number;
@@ -8,6 +19,12 @@ export interface TokenMetrics {
   cacheCreation: number;
   apiEquivalentUsd: number;
   pricingTableVersion: string;
+  /**
+   * Usage split by model, ranked by total tokens. Every counted token lands in
+   * exactly one entry (records with no model id bucket as "(unknown)"), so the
+   * per-model sums always reconcile with the totals above.
+   */
+  byModel: ModelTokenUsage[];
 }
 
 interface ModelRate {
@@ -44,6 +61,7 @@ export class TokensEngine {
   private seen = new Set<string>();
   private totals = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
   private usd = 0;
+  private byModel = new Map<string, Omit<ModelTokenUsage, "model">>();
 
   addAssistant(record: RawRecord): void {
     if (record.type !== "assistant") return;
@@ -70,16 +88,30 @@ export class TokensEngine {
     this.totals.cacheRead += cacheRead;
     this.totals.cacheCreation += cacheCreation;
 
-    const model = typeof msg.model === "string" ? msg.model : "";
+    const model = typeof msg.model === "string" && msg.model.length > 0 ? msg.model : "";
     const rate = rateFor(model);
+    let usd = 0;
     if (rate) {
-      this.usd +=
+      usd =
         (input * rate.input +
           output * rate.output +
           cacheRead * rate.input * pricingTable.cacheReadMultiplier +
           cacheCreation * rate.input * pricingTable.cacheWriteMultiplier) /
         1_000_000;
+      this.usd += usd;
     }
+
+    // sanitized: a corrupt model value would otherwise surface verbatim in --json
+    const label = safeModelName(model === "" ? "(unknown)" : model);
+    const entry =
+      this.byModel.get(label) ??
+      { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, apiEquivalentUsd: 0 };
+    entry.input += input;
+    entry.output += output;
+    entry.cacheRead += cacheRead;
+    entry.cacheCreation += cacheCreation;
+    entry.apiEquivalentUsd += usd;
+    this.byModel.set(label, entry);
   }
 
   result(): TokenMetrics {
@@ -87,6 +119,21 @@ export class TokensEngine {
       ...this.totals,
       apiEquivalentUsd: Math.round(this.usd * 100) / 100,
       pricingTableVersion: pricingTable.version,
+      byModel: [...this.byModel.entries()]
+        .map(([model, e]) => ({
+          model,
+          input: e.input,
+          output: e.output,
+          cacheRead: e.cacheRead,
+          cacheCreation: e.cacheCreation,
+          apiEquivalentUsd: Math.round(e.apiEquivalentUsd * 100) / 100,
+        }))
+        .sort(
+          (a, b) =>
+            b.input + b.output + b.cacheRead + b.cacheCreation -
+              (a.input + a.output + a.cacheRead + a.cacheCreation) ||
+            (a.model < b.model ? -1 : 1),
+        ),
     };
   }
 }

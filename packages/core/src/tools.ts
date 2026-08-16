@@ -1,8 +1,11 @@
 import { safeToolName } from "./sanitize.js";
+import type { EditAcceptanceMetrics } from "./acceptance.js";
 
 export interface ToolsMetrics {
   builtin: { name: string; count: number }[];
   mcp: { totalCalls: number; servers: number };
+  /** How often the user accepted proposed edits (Edit/MultiEdit/Write/NotebookEdit). */
+  editActions: EditAcceptanceMetrics;
 }
 
 /**
@@ -26,7 +29,9 @@ export class ToolsEngine {
     this.builtin.set(safe, (this.builtin.get(safe) ?? 0) + 1);
   }
 
-  result(): ToolsMetrics {
+  // editActions is assembled from the AcceptanceEngine and merged in by assemble();
+  // this engine owns only the call tallies.
+  result(): Omit<ToolsMetrics, "editActions"> {
     return {
       builtin: [...this.builtin.entries()]
         .map(([name, count]) => ({ name, count }))

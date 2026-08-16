@@ -25,7 +25,7 @@ describe("analyze() over the fixture corpus", () => {
 
   it("assembles source info per the manifest", async () => {
     const m = await run();
-    expect(m.schemaVersion).toBe("1.0.0");
+    expect(m.schemaVersion).toBe("1.1.0");
     expect(m.source.files).toBe(corpus.files);
     expect(m.source.records).toBe(corpus.parsedRecords);
     expect(m.source.ccVersionRange).toEqual(corpus.ccVersionRange);
@@ -54,6 +54,7 @@ describe("analyze() over the fixture corpus", () => {
     expect(m.activity.compactions).toBe(corpus.activity.compactions);
     expect(m.delivery).toEqual(corpus.delivery);
     expect(m.tokens.input).toBe(corpus.tokens.input);
+    expect(m.tools.editActions).toMatchObject(corpus.tools.editActions);
     const kinds = Object.fromEntries(
       m.source.parserWarnings.map((w) => [`${w.kind}|${w.type ?? w.tool ?? w.ext ?? w.file}`, w.count]),
     );

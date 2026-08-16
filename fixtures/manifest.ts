@@ -13,10 +13,10 @@ export const corpus = {
   files: 9, // 8 main session files + 1 agent file
   mainFiles: 8,
   agentFiles: 1,
-  totalLines: 57,
-  parsedRecords: 56, // one deliberately unparseable line
+  totalLines: 61,
+  parsedRecords: 60, // one deliberately unparseable line
   ccVersionRange: ["2.0.70", "2.1.170"] as const,
-  dateRange: ["2026-06-01T10:00:00.000Z", "2026-06-08T13:05:05.000Z"] as const,
+  dateRange: ["2026-06-01T10:00:00.000Z", "2026-06-08T13:06:03.000Z"] as const,
 
   warnings: {
     unknownRecordType: { frobnicate: 1 },
@@ -35,7 +35,7 @@ export const corpus = {
     writes: 7,
     edits: 2, // empty-input Edit is skipped, not counted
     multiEdits: 1,
-    notebookEdits: 1,
+    notebookEdits: 2, // one counted, one delete-mode edit the user rejected
     tsLinesAdded: 10, // byLanguage: all fixture code is .ts
   },
 
@@ -44,6 +44,7 @@ export const corpus = {
     repositories: 2,
     branches: 3, // main, claude/fix-1, dev
     claudeBranches: 1,
+    commits: 1, // `git add -A && git commit -m ...` in session 8
   },
 
   activity: {
@@ -54,15 +55,17 @@ export const corpus = {
     longestStreak: 3, // 06-01..03
     currentStreak: 2, // 06-07..08 run; last active 06-08 is "yesterday" vs now 06-09
     humanPrompts: 10, // excludes toolUseResult, isMeta, isCompactSummary, sidechain
-    assistantTurns: 22, // deduped by requestId (req_003 appears twice)
+    assistantTurns: 24, // deduped by requestId (req_003 appears twice)
     firstSession: "2026-06-01T10:00:00.000Z",
     byEntrypoint: { cli: 6, "claude-desktop": 1 },
     compactions: 1,
   },
 
   tools: {
-    builtin: { Write: 7, Edit: 3, MultiEdit: 1, NotebookEdit: 1, Agent: 1, Patch: 1 },
+    builtin: { Write: 7, Edit: 3, MultiEdit: 1, NotebookEdit: 2, Agent: 1, Patch: 1, Bash: 1 },
     mcp: { totalCalls: 0, servers: 0 },
+    // one Write + one Edit resolved cleanly; the delete-mode NotebookEdit was declined
+    editActions: { accepted: 2, rejected: 1, acceptanceRate: 0.667 },
   },
 
   tokens: {
