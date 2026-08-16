@@ -23,9 +23,14 @@ async function runAll() {
       delivery.addRecord(record, file.isAgent);
       tokens.addAssistant(record);
       if (record.type === "assistant") {
-        const msg = record.message as { content?: { type: string; name?: string }[] };
+        const msg = record.message as {
+          content?: { type: string; name?: string; input?: unknown }[];
+        };
         for (const block of msg?.content ?? []) {
-          if (block.type === "tool_use" && block.name) tools.addToolUse(block.name);
+          if (block.type === "tool_use" && block.name) {
+            tools.addToolUse(block.name);
+            delivery.addToolUse(block.name, block.input);
+          }
         }
       }
     }
@@ -151,6 +156,56 @@ describe("TokensEngine", () => {
     const expected =
       Math.round(((629 * 10 + 299 * 50 + 35 * 1 + 17 * 12.5) / 1_000_000) * 100) / 100;
     expect(tokens.apiEquivalentUsd).toBe(expected);
+  });
+
+  it("splits usage by model, ranked by total tokens", () => {
+    const eng = new TokensEngine();
+    eng.addAssistant({
+      type: "assistant",
+      requestId: "r1",
+      message: { model: "claude-fable-5", usage: { input_tokens: 100, output_tokens: 50 } },
+    });
+    eng.addAssistant({
+      type: "assistant",
+      requestId: "r2",
+      message: { model: "claude-haiku-4-5-20251001", usage: { input_tokens: 10, output_tokens: 5 } },
+    });
+    eng.addAssistant({
+      type: "assistant",
+      requestId: "r3",
+      message: { model: "claude-fable-5", usage: { input_tokens: 1, cache_read_input_tokens: 4 } },
+    });
+    const r = eng.result();
+    expect(r.byModel.map((m) => m.model)).toEqual([
+      "claude-fable-5",
+      "claude-haiku-4-5-20251001",
+    ]);
+    expect(r.byModel[0]).toMatchObject({ input: 101, output: 50, cacheRead: 4 });
+    expect(r.byModel[1]).toMatchObject({ input: 10, output: 5 });
+  });
+
+  it("keeps per-model sums reconciled with the totals", async () => {
+    const { tokens } = await runAll();
+    const sum = (k: "input" | "output" | "cacheRead" | "cacheCreation") =>
+      tokens.byModel.reduce((n, m) => n + m[k], 0);
+    expect(sum("input")).toBe(tokens.input);
+    expect(sum("output")).toBe(tokens.output);
+    expect(sum("cacheRead")).toBe(tokens.cacheRead);
+    expect(sum("cacheCreation")).toBe(tokens.cacheCreation);
+  });
+
+  it("buckets missing model ids as (unknown) and sanitizes hostile ones", () => {
+    const eng = new TokensEngine();
+    eng.addAssistant({ type: "assistant", requestId: "r1", message: { usage: { input_tokens: 7 } } });
+    eng.addAssistant({
+      type: "assistant",
+      requestId: "r2",
+      message: { model: "C:/secret/path model", usage: { input_tokens: 3 } },
+    });
+    const models = eng.result().byModel.map((m) => m.model);
+    expect(models).toContain("(unknown)");
+    expect(models).toContain("<invalid-model>");
+    expect(JSON.stringify(models)).not.toContain("secret");
   });
 
   it("treats missing usage fields as zero, never wrong numbers", () => {

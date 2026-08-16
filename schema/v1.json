@@ -180,14 +180,31 @@
     "tokens": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["input", "output", "cacheRead", "cacheCreation", "apiEquivalentUsd", "pricingTableVersion"],
+      "required": ["input", "output", "cacheRead", "cacheCreation", "apiEquivalentUsd", "pricingTableVersion", "byModel"],
       "properties": {
         "input": { "type": "integer", "minimum": 0 },
         "output": { "type": "integer", "minimum": 0 },
         "cacheRead": { "type": "integer", "minimum": 0 },
         "cacheCreation": { "type": "integer", "minimum": 0 },
         "apiEquivalentUsd": { "type": "number", "minimum": 0 },
-        "pricingTableVersion": { "type": "string" }
+        "pricingTableVersion": { "type": "string" },
+        "byModel": {
+          "type": "array",
+          "description": "Usage split by model, ranked by total tokens. Per-model sums reconcile with the totals above; records with no model id bucket as '(unknown)'.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["model", "input", "output", "cacheRead", "cacheCreation", "apiEquivalentUsd"],
+            "properties": {
+              "model": { "type": "string" },
+              "input": { "type": "integer", "minimum": 0 },
+              "output": { "type": "integer", "minimum": 0 },
+              "cacheRead": { "type": "integer", "minimum": 0 },
+              "cacheCreation": { "type": "integer", "minimum": 0 },
+              "apiEquivalentUsd": { "type": "number", "minimum": 0 }
+            }
+          }
+        }
       }
     },
     "git": {

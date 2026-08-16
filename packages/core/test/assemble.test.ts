@@ -54,6 +54,7 @@ describe("analyze() over the fixture corpus", () => {
     expect(m.activity.compactions).toBe(corpus.activity.compactions);
     expect(m.delivery).toEqual(corpus.delivery);
     expect(m.tokens.input).toBe(corpus.tokens.input);
+    expect(m.tools.editActions).toMatchObject(corpus.tools.editActions);
     const kinds = Object.fromEntries(
       m.source.parserWarnings.map((w) => [`${w.kind}|${w.type ?? w.tool ?? w.ext ?? w.file}`, w.count]),
     );

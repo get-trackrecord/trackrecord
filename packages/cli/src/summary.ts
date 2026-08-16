@@ -79,6 +79,11 @@ export function renderSummary(metrics: Metrics): string {
       .join(" · ") || "—";
   const topTool = tools.builtin[0];
   const totalTokens = tokens.input + tokens.output + tokens.cacheRead + tokens.cacheCreation;
+  const topModel = tokens.byModel[0];
+  const topModelShare =
+    topModel && totalTokens > 0
+      ? `${Math.round(((topModel.input + topModel.output + topModel.cacheRead + topModel.cacheCreation) / totalTokens) * 100)}% of tokens`
+      : "";
   const accept = tools.editActions;
   const acceptValue =
     accept.acceptanceRate === null ? "—" : `${Math.round(accept.acceptanceRate * 100)}%`;
@@ -123,6 +128,7 @@ export function renderSummary(metrics: Metrics): string {
       formatCount(totalTokens),
       `$${tokens.apiEquivalentUsd.toFixed(2)} API-equiv`,
     ),
+    ledger("top model", topModel ? truncate(topModel.model, 20) : "—", topModelShare),
     MID,
     row("/trackrecord  ·  npx trackrecord", "zero network calls", dim, dim),
     BOT,

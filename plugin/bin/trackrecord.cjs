@@ -32,6 +32,98 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
+// packages/core/src/acceptance.ts
+function messageBlocks(record) {
+  const message = record.message;
+  if (typeof message !== "object" || message === null) return [];
+  const content = message.content;
+  if (!Array.isArray(content)) return [];
+  return content.filter(
+    (b) => typeof b === "object" && b !== null
+  );
+}
+function resultText(block) {
+  const content = block.content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  const parts = [];
+  for (const b of content) {
+    if (typeof b === "string") parts.push(b);
+    else if (typeof b === "object" && b !== null && typeof b.text === "string") {
+      parts.push(b.text);
+    }
+  }
+  return parts.join("\n");
+}
+function isRejection(text) {
+  return REJECTION_PATTERNS.some((re) => re.test(text));
+}
+var EDIT_TOOLS, EDIT_TOOL_SET, REJECTION_PATTERNS, AcceptanceEngine;
+var init_acceptance = __esm({
+  "packages/core/src/acceptance.ts"() {
+    "use strict";
+    EDIT_TOOLS = ["Edit", "MultiEdit", "Write", "NotebookEdit"];
+    EDIT_TOOL_SET = new Set(EDIT_TOOLS);
+    REJECTION_PATTERNS = [
+      /user doesn't want to proceed/i,
+      /user doesn't want to take this action/i,
+      /tool use was rejected/i,
+      /user rejected/i,
+      /request interrupted by user/i
+    ];
+    AcceptanceEngine = class {
+      pending = /* @__PURE__ */ new Map();
+      counts = {
+        Edit: { accepted: 0, rejected: 0 },
+        MultiEdit: { accepted: 0, rejected: 0 },
+        Write: { accepted: 0, rejected: 0 },
+        NotebookEdit: { accepted: 0, rejected: 0 }
+      };
+      addRecord(record) {
+        if (record.type === "assistant") this.registerUses(record);
+        else if (record.type === "user") this.resolveResults(record);
+      }
+      registerUses(record) {
+        for (const block of messageBlocks(record)) {
+          if (block.type === "tool_use" && typeof block.id === "string" && typeof block.name === "string" && EDIT_TOOL_SET.has(block.name)) {
+            this.pending.set(block.id, block.name);
+          }
+        }
+      }
+      resolveResults(record) {
+        for (const block of messageBlocks(record)) {
+          if (block.type !== "tool_result" || typeof block.tool_use_id !== "string") continue;
+          const tool = this.pending.get(block.tool_use_id);
+          if (tool === void 0) continue;
+          this.pending.delete(block.tool_use_id);
+          if (isRejection(resultText(block))) this.counts[tool].rejected += 1;
+          else this.counts[tool].accepted += 1;
+        }
+      }
+      result() {
+        let accepted = 0;
+        let rejected = 0;
+        for (const tool of EDIT_TOOLS) {
+          accepted += this.counts[tool].accepted;
+          rejected += this.counts[tool].rejected;
+        }
+        const resolved = accepted + rejected;
+        return {
+          byTool: {
+            Edit: { ...this.counts.Edit },
+            MultiEdit: { ...this.counts.MultiEdit },
+            Write: { ...this.counts.Write },
+            NotebookEdit: { ...this.counts.NotebookEdit }
+          },
+          accepted,
+          rejected,
+          acceptanceRate: resolved === 0 ? null : Math.round(accepted / resolved * 1e3) / 1e3
+        };
+      }
+    };
+  }
+});
+
 // packages/core/src/sanitize.ts
 function safeTypeName(type) {
   return /^[a-z][a-z0-9-]{0,31}$/.test(type) ? type : "<invalid-type>";
@@ -49,6 +141,10 @@ function redactMcpToolName(name) {
 function safeExt(ext) {
   if (ext === "(none)") return ext;
   return /^[a-z0-9]{1,12}$/.test(ext) ? ext : "<nonstandard>";
+}
+function safeModelName(model) {
+  if (model === "(unknown)") return model;
+  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(model) ? model : "<invalid-model>";
 }
 function safeEnumValue(value) {
   return /^[A-Za-z][A-Za-z0-9-]{0,23}$/.test(value) ? value : "<other>";
@@ -113,14 +209,30 @@ var init_classify = __esm({
 });
 
 // packages/core/src/delivery.ts
-var DeliveryEngine;
+function isGitCommit(segment) {
+  const tokens = segment.trim().split(/\s+/).filter(Boolean);
+  if (tokens[0] !== "git") return false;
+  let i = 1;
+  while (i < tokens.length) {
+    const tok = tokens[i];
+    if (!tok.startsWith("-")) break;
+    if (GIT_ARG_OPTS.has(tok)) i += 1;
+    i += 1;
+  }
+  if (tokens[i] !== "commit") return false;
+  return !tokens.slice(i + 1).some((t) => t === "--dry-run" || t === "--help");
+}
+var SEGMENT_SEP, GIT_ARG_OPTS, DeliveryEngine;
 var init_delivery = __esm({
   "packages/core/src/delivery.ts"() {
     "use strict";
+    SEGMENT_SEP = /&&|\|\||;|\||\n/;
+    GIT_ARG_OPTS = /* @__PURE__ */ new Set(["-C", "-c", "--namespace", "--git-dir", "--work-tree", "--exec-path"]);
     DeliveryEngine = class {
       prUrls = /* @__PURE__ */ new Set();
       repos = /* @__PURE__ */ new Set();
       branches = /* @__PURE__ */ new Set();
+      commits = 0;
       addRecord(record, isAgentFile) {
         if (record.type === "pr-link") {
           if (typeof record.prUrl === "string" && record.prUrl.length > 0) {
@@ -135,12 +247,26 @@ var init_delivery = __esm({
           this.branches.add(record.gitBranch);
         }
       }
+      /**
+       * Count git commits made through Claude Code, detected from Bash commands.
+       * Fed from the same tool-use pass assemble already walks. `--dry-run` and
+       * `--help` invocations are excluded — they propose nothing and write no commit.
+       */
+      addToolUse(name, input) {
+        if (name !== "Bash" || typeof input !== "object" || input === null) return;
+        const command = input.command;
+        if (typeof command !== "string" || command.length === 0) return;
+        for (const segment of command.split(SEGMENT_SEP)) {
+          if (isGitCommit(segment)) this.commits += 1;
+        }
+      }
       result() {
         return {
           pullRequests: this.prUrls.size,
           repositories: this.repos.size,
           branches: this.branches.size,
-          claudeBranches: [...this.branches].filter((b) => /^claude\//.test(b)).length
+          claudeBranches: [...this.branches].filter((b) => /^claude\//.test(b)).length,
+          commits: this.commits
         };
       }
     };
@@ -763,7 +889,7 @@ var SCHEMA_VERSION;
 var init_schema = __esm({
   "packages/core/src/schema.ts"() {
     "use strict";
-    SCHEMA_VERSION = "1.0.0";
+    SCHEMA_VERSION = "1.1.0";
   }
 });
 
@@ -983,11 +1109,13 @@ var init_tokens = __esm({
   "packages/core/src/tokens.ts"() {
     "use strict";
     init__();
+    init_sanitize();
     RATES = __default.models;
     TokensEngine = class {
       seen = /* @__PURE__ */ new Set();
       totals = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
       usd = 0;
+      byModel = /* @__PURE__ */ new Map();
       addAssistant(record) {
         if (record.type !== "assistant") return;
         const requestId = record.requestId;
@@ -1008,17 +1136,37 @@ var init_tokens = __esm({
         this.totals.output += output;
         this.totals.cacheRead += cacheRead;
         this.totals.cacheCreation += cacheCreation;
-        const model = typeof msg.model === "string" ? msg.model : "";
+        const model = typeof msg.model === "string" && msg.model.length > 0 ? msg.model : "";
         const rate = rateFor(model);
+        let usd = 0;
         if (rate) {
-          this.usd += (input * rate.input + output * rate.output + cacheRead * rate.input * __default.cacheReadMultiplier + cacheCreation * rate.input * __default.cacheWriteMultiplier) / 1e6;
+          usd = (input * rate.input + output * rate.output + cacheRead * rate.input * __default.cacheReadMultiplier + cacheCreation * rate.input * __default.cacheWriteMultiplier) / 1e6;
+          this.usd += usd;
         }
+        const label = safeModelName(model === "" ? "(unknown)" : model);
+        const entry = this.byModel.get(label) ?? { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, apiEquivalentUsd: 0 };
+        entry.input += input;
+        entry.output += output;
+        entry.cacheRead += cacheRead;
+        entry.cacheCreation += cacheCreation;
+        entry.apiEquivalentUsd += usd;
+        this.byModel.set(label, entry);
       }
       result() {
         return {
           ...this.totals,
           apiEquivalentUsd: Math.round(this.usd * 100) / 100,
-          pricingTableVersion: __default.version
+          pricingTableVersion: __default.version,
+          byModel: [...this.byModel.entries()].map(([model, e]) => ({
+            model,
+            input: e.input,
+            output: e.output,
+            cacheRead: e.cacheRead,
+            cacheCreation: e.cacheCreation,
+            apiEquivalentUsd: Math.round(e.apiEquivalentUsd * 100) / 100
+          })).sort(
+            (a, b) => b.input + b.output + b.cacheRead + b.cacheCreation - (a.input + a.output + a.cacheRead + a.cacheCreation) || (a.model < b.model ? -1 : 1)
+          )
         };
       }
     };
@@ -1045,6 +1193,8 @@ var init_tools = __esm({
         const safe = safeToolName(name);
         this.builtin.set(safe, (this.builtin.get(safe) ?? 0) + 1);
       }
+      // editActions is assembled from the AcceptanceEngine and merged in by assemble();
+      // this engine owns only the call tallies.
       result() {
         return {
           builtin: [...this.builtin.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || (a.name < b.name ? -1 : 1)),
@@ -1119,6 +1269,7 @@ async function analyze(options) {
   const warnings = new WarningCollector();
   const sessions = new SessionEngine();
   const delivery = new DeliveryEngine();
+  const acceptance = new AcceptanceEngine();
   const tools = new ToolsEngine();
   const tokens = new TokensEngine();
   const loc = new LocEngine(warnings);
@@ -1159,10 +1310,12 @@ async function analyze(options) {
       }
       sessions.addRecord(record);
       delivery.addRecord(record, file.isAgent);
+      acceptance.addRecord(record);
       tokens.addAssistant(record);
       const project = (0, import_node_path4.basename)(typeof record.cwd === "string" && record.cwd ? record.cwd : "unknown");
       for (const { name, input } of toolUses(record)) {
         tools.addToolUse(name);
+        delivery.addToolUse(name, input);
         if (COUNTED_WRITERS.has(name)) {
           locEvents.push({ name, input, timestamp: typeof timestamp === "string" ? timestamp : "", project });
         } else {
@@ -1187,7 +1340,7 @@ async function analyze(options) {
     output: redactProjects(loc.result(sessions.projectSessions()), options.showProjectNames === true),
     delivery: delivery.result(),
     activity: sessions.result(now),
-    tools: tools.result(),
+    tools: { ...tools.result(), editActions: acceptance.result() },
     tokens: tokens.result(),
     git: { reserved: true }
   };
@@ -1197,6 +1350,7 @@ var init_assemble = __esm({
   "packages/core/src/assemble.ts"() {
     "use strict";
     import_node_path4 = require("node:path");
+    init_acceptance();
     init_classify();
     init_delivery();
     init_loc();
@@ -1461,6 +1615,11 @@ function renderSummary(metrics) {
   const topLangs = output.byLanguage.filter((l) => isCodeExt(l.lang)).slice(0, 3).map((l) => `${l.lang} ${formatCount(l.linesAdded)}`).join(" \xB7 ") || "\u2014";
   const topTool = tools.builtin[0];
   const totalTokens = tokens.input + tokens.output + tokens.cacheRead + tokens.cacheCreation;
+  const topModel = tokens.byModel[0];
+  const topModelShare = topModel && totalTokens > 0 ? `${Math.round((topModel.input + topModel.output + topModel.cacheRead + topModel.cacheCreation) / totalTokens * 100)}% of tokens` : "";
+  const accept = tools.editActions;
+  const acceptValue = accept.acceptanceRate === null ? "\u2014" : `${Math.round(accept.acceptanceRate * 100)}%`;
+  const acceptSub = accept.acceptanceRate === null ? "" : `${formatCount(accept.accepted)}/${formatCount(accept.accepted + accept.rejected)} edits`;
   const lines = [
     TOP,
     row("TRACKRECORD", `since ${since} \u2192 ${until}`, bold, dim),
@@ -1491,12 +1650,15 @@ function renderSummary(metrics) {
       topTool ? displayTool(topTool.name, 20) : "\u2014",
       topTool ? `\xD7${formatCount(topTool.count)}` : ""
     ),
+    ledger("commits", formatCount(delivery.commits), "made by Claude"),
+    ledger("edit accept rate", acceptValue, acceptSub),
     ledger("context ceiling", `${formatCount(activity.compactions)}\xD7 hit`),
     ledger(
       "total tokens",
       formatCount(totalTokens),
       `$${tokens.apiEquivalentUsd.toFixed(2)} API-equiv`
     ),
+    ledger("top model", topModel ? truncate(topModel.model, 20) : "\u2014", topModelShare),
     MID,
     row("/trackrecord  \xB7  npx trackrecord", "zero network calls", dim, dim),
     BOT

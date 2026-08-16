@@ -35,6 +35,16 @@ export function safeExt(ext: string): string {
   return /^[a-z0-9]{1,12}$/.test(ext) ? ext : "<nonstandard>";
 }
 
+/**
+ * Model ids: claude-opus-5, claude-haiku-4-5-20251001, us.anthropic.claude-... —
+ * lowercase-ish identifiers with dots, hyphens, and colons (Bedrock/Vertex ids).
+ * "(unknown)" is the deliberate missing-model bucket, mirroring safeExt's "(none)".
+ */
+export function safeModelName(model: string): string {
+  if (model === "(unknown)") return model;
+  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(model) ? model : "<invalid-model>";
+}
+
 /** Enum-ish values (entrypoint, promptSource): cli, claude-desktop, sdk-ts, user... */
 export function safeEnumValue(value: string): string {
   return /^[A-Za-z][A-Za-z0-9-]{0,23}$/.test(value) ? value : "<other>";

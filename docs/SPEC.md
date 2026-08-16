@@ -90,7 +90,8 @@ Semver: additive = minor, breaking = major. Ship a JSON Schema file for it in th
     "pullRequests": 0,      // distinct prUrl across pr-link records
     "repositories": 0,      // distinct prRepository
     "branches": 0,          // distinct gitBranch (main session files only)
-    "claudeBranches": 0     // branches matching ^claude\//
+    "claudeBranches": 0,    // branches matching ^claude\//
+    "commits": 0            // `git commit` invocations in Bash tool input
   },
   "activity": {
     "sessions": 0, "subagentRuns": 0, "projects": 0,
@@ -102,12 +103,20 @@ Semver: additive = minor, breaking = major. Ship a JSON Schema file for it in th
   },
   "tools": {
     "builtin": [ { "name": "Bash", "count": 0 } ],
-    "mcp": { "totalCalls": 0, "servers": 0 }   // never surface raw mcp__<uuid> names
+    "mcp": { "totalCalls": 0, "servers": 0 },  // never surface raw mcp__<uuid> names
+    "editActions": {                           // accept/reject per edit-family tool
+      "byTool": { "Edit": { "accepted": 0, "rejected": 0 }, "MultiEdit": { "accepted": 0, "rejected": 0 },
+                  "Write": { "accepted": 0, "rejected": 0 }, "NotebookEdit": { "accepted": 0, "rejected": 0 } },
+      "accepted": 0, "rejected": 0,
+      "acceptanceRate": null                   // null when nothing resolved
+    }
   },
   "tokens": {
     "input": 0, "output": 0, "cacheRead": 0, "cacheCreation": 0,
     "apiEquivalentUsd": 0,
-    "pricingTableVersion": "2026-06"
+    "pricingTableVersion": "2026-06",
+    "byModel": [ { "model": "claude-opus-5", "input": 0, "output": 0,
+                   "cacheRead": 0, "cacheCreation": 0, "apiEquivalentUsd": 0 } ]
   },
   "git": { "reserved": true }
 }
@@ -161,7 +170,28 @@ Semver: additive = minor, breaking = major. Ship a JSON Schema file for it in th
 must not double-count). `apiEquivalentUsd` from a pricing table checked into the repo as
 versioned data (`pricing/2026-06.json`); label is always "API-equivalent value", never
 "spend". Older records lack `iterations`/`speed`/`server_tool_use` — treat all usage
-fields as optional.
+fields as optional. `byModel` splits the same deduped usage by `message.model`; records
+with no model id bucket as `(unknown)` so per-model sums always reconcile with the
+totals. Model ids are sanitized before they are surfaced.
+
+**Commits:** `delivery.commits` counts `git commit` invocations in `Bash` tool input.
+Split the command on shell separators (`&&`, `||`, `;`, `|`, newline) and, within a
+segment, walk past git's global options AND their arguments (`-C`, `-c`, `--git-dir`, …)
+to find the real subcommand — so `git -C repo commit` counts while `git log`,
+`git commit-graph write`, and a `commit` word inside a message body do not. `--dry-run`
+and `--help` are excluded. Conservative-by-design: an amend or a failed commit still
+counts once (the log records the attempt, not the exit code). This is a count of commit
+ACTIONS from the transcript — it is NOT git commit-survival enrichment, which stays
+parked behind the reserved `git` slot, and it counts no lines of code.
+
+**Edit acceptance:** `tools.editActions` pairs each edit-family `tool_use`
+(Edit/MultiEdit/Write/NotebookEdit) with its `tool_result` by `tool_use_id`. A result
+matching a human-decline sentinel ("user doesn't want to proceed", interrupt, …) is
+REJECTED; every other resolved result — including a genuine tool failure such as
+"String to replace not found" — is ACCEPTED, because the user accepted the action and
+the tool merely failed. A `tool_use` that never resolves (truncated session) counts as
+neither, so it cannot skew the rate in either direction. `acceptanceRate` =
+`accepted / (accepted + rejected)`, or `null` when nothing resolved.
 
 ## Parser architecture (hard rules)
 

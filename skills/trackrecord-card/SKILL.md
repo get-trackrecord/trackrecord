@@ -56,6 +56,9 @@ All values come from `npx trackrecord --json`. Number formatting (`fmt`):
 | `{{TOOL}}` | `tools.builtin[0].name`; if it matches `mcp__<redacted>__SUFFIX` display `SUFFIX (MCP)`; truncate to ~16 chars with `…`; `—` if absent |
 | `{{TOOL_COUNT}}` | `×{fmt(tools.builtin[0].count)} calls` |
 | `{{COMPACTIONS}}` | `fmt(activity.compactions)` + `×` |
+| `{{COMMITS}}` | `fmt(delivery.commits)` |
+| `{{ACCEPT_RATE}}` | `tools.editActions.acceptanceRate` as `{round(rate*100)}%`; `—` if null |
+| `{{ACCEPT_SUB}}` | `{fmt(accepted)}/{fmt(accepted+rejected)} edits`, or empty string if `acceptanceRate` is null |
 | `{{TOKENS}}` | `fmt(tokens.input + tokens.output + tokens.cacheRead + tokens.cacheCreation)` |
 
 CODE extensions (the code bucket — this list is part of the contract):
@@ -64,7 +67,7 @@ CODE extensions (the code bucket — this list is part of the contract):
 ## The card template (FROZEN — substitute slots only)
 
 ```html
-<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">Trackrecord card: {{LOC}} lines of code added, {{PRS}} pull requests shipped; top languages {{LANGS}}; {{SESSIONS}} sessions, {{ACTIVE_DAYS}} active days, longest streak {{STREAK}}; top tool {{TOOL}} {{TOOL_COUNT}}; context ceiling hit {{COMPACTIONS}}; {{TOKENS}} total tokens. Dated {{DATE_FROM}} to {{DATE_TO}}. Zero network calls, local parser only. Run with /trackrecord in Claude Code, or npx trackrecord in a terminal.</h2>
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">Trackrecord card: {{LOC}} lines of code added, {{PRS}} pull requests shipped; top languages {{LANGS}}; {{SESSIONS}} sessions, {{ACTIVE_DAYS}} active days, longest streak {{STREAK}}, {{COMMITS}} commits; top tool {{TOOL}} {{TOOL_COUNT}}; context ceiling hit {{COMPACTIONS}}; {{TOKENS}} total tokens, edit accept rate {{ACCEPT_RATE}} {{ACCEPT_SUB}}. Dated {{DATE_FROM}} to {{DATE_TO}}. Zero network calls, local parser only. Run with /trackrecord in Claude Code, or npx trackrecord in a terminal.</h2>
 <div style="container-type:inline-size;background:#f4efe4;color:#211c14;font-family:var(--font-mono);padding:30px 40px 24px;border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);">
 
   <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #211c14;padding-bottom:8px;">
@@ -92,12 +95,14 @@ CODE extensions (the code bucket — this list is part of the contract):
     <div style="flex:1;">
       <div style="display:flex;justify-content:space-between;align-items:baseline;height:56px;border-bottom:1px solid #d8cfb8;"><div style="font-size:14px;letter-spacing:1px;color:#5a5240;">SESSIONS</div><div style="font-family:var(--font-mono);font-weight:500;font-size:clamp(18px,5cqw,28px);">{{SESSIONS}}</div></div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;height:56px;border-bottom:1px solid #d8cfb8;"><div style="font-size:14px;letter-spacing:1px;color:#5a5240;">ACTIVE DAYS</div><div style="font-family:var(--font-mono);font-weight:500;font-size:clamp(18px,5cqw,28px);">{{ACTIVE_DAYS}}</div></div>
-      <div style="display:flex;justify-content:space-between;align-items:baseline;height:56px;"><div><div style="font-size:14px;letter-spacing:1px;color:#5a5240;">LONGEST STREAK</div><div style="font-size:12px;color:#7a7058;margin-top:3px;">{{CURRENT_STREAK}}</div></div><div style="font-family:var(--font-mono);font-weight:500;font-size:clamp(18px,5cqw,28px);">{{STREAK}}</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;height:56px;border-bottom:1px solid #d8cfb8;"><div><div style="font-size:14px;letter-spacing:1px;color:#5a5240;">LONGEST STREAK</div><div style="font-size:12px;color:#7a7058;margin-top:3px;">{{CURRENT_STREAK}}</div></div><div style="font-family:var(--font-mono);font-weight:500;font-size:clamp(18px,5cqw,28px);">{{STREAK}}</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;height:56px;"><div style="font-size:14px;letter-spacing:1px;color:#5a5240;">COMMITS</div><div style="font-family:var(--font-mono);font-weight:500;font-size:clamp(18px,5cqw,28px);">{{COMMITS}}</div></div>
     </div>
     <div style="flex:1;">
       <div style="display:flex;justify-content:space-between;align-items:baseline;height:56px;border-bottom:1px solid #d8cfb8;"><div><div style="font-size:14px;letter-spacing:1px;color:#5a5240;">TOP TOOL</div><div style="font-size:12px;color:#7a7058;margin-top:3px;">{{TOOL_COUNT}}</div></div><div style="font-family:var(--font-mono);font-weight:500;font-size:clamp(18px,5cqw,28px);">{{TOOL}}</div></div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;height:56px;border-bottom:1px solid #d8cfb8;"><div style="font-size:14px;letter-spacing:1px;color:#5a5240;">CONTEXT CEILING HIT</div><div style="font-family:var(--font-mono);font-weight:500;font-size:clamp(18px,5cqw,28px);">{{COMPACTIONS}}</div></div>
-      <div style="display:flex;justify-content:space-between;align-items:baseline;height:56px;"><div style="font-size:14px;letter-spacing:1px;color:#5a5240;">TOTAL TOKENS</div><div style="font-family:var(--font-mono);font-weight:500;font-size:clamp(18px,5cqw,28px);">{{TOKENS}}</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;height:56px;border-bottom:1px solid #d8cfb8;"><div style="font-size:14px;letter-spacing:1px;color:#5a5240;">TOTAL TOKENS</div><div style="font-family:var(--font-mono);font-weight:500;font-size:clamp(18px,5cqw,28px);">{{TOKENS}}</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;height:56px;"><div><div style="font-size:14px;letter-spacing:1px;color:#5a5240;">EDIT ACCEPT RATE</div><div style="font-size:12px;color:#7a7058;margin-top:3px;">{{ACCEPT_SUB}}</div></div><div style="font-family:var(--font-mono);font-weight:500;font-size:clamp(18px,5cqw,28px);">{{ACCEPT_RATE}}</div></div>
     </div>
   </div>
 
@@ -118,6 +123,10 @@ CODE extensions (the code bucket — this list is part of the contract):
   accent on the LOC hero and the two footer commands only, the 2px bookend rules
   (top of card + above footer), and the single-line footer (install/run on the
   left, `zero network calls · local parser only` on the right): all frozen.
+- The stat grid is two FOUR-row columns — left: sessions / active days / longest
+  streak / commits; right: top tool / context ceiling / total tokens / edit accept
+  rate. Row order, the 56px row height, and the borderless final row in each column
+  are frozen along with everything else.
 - Data values come ONLY from the CLI output of this run. Never estimate, carry
   over, or fabricate a number.
 - Never show project folder names unless the user explicitly ran with
