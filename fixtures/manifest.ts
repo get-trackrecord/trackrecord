@@ -44,6 +44,7 @@ export const corpus = {
     repositories: 2,
     branches: 3, // main, claude/fix-1, dev
     claudeBranches: 1,
+    commits: 0, // no `git commit` Bash calls in the synthetic corpus
   },
 
   activity: {

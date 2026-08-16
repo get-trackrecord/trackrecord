@@ -95,12 +95,13 @@
     "delivery": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["pullRequests", "repositories", "branches", "claudeBranches"],
+      "required": ["pullRequests", "repositories", "branches", "claudeBranches", "commits"],
       "properties": {
         "pullRequests": { "type": "integer", "minimum": 0 },
         "repositories": { "type": "integer", "minimum": 0 },
         "branches": { "type": "integer", "minimum": 0 },
-        "claudeBranches": { "type": "integer", "minimum": 0 }
+        "claudeBranches": { "type": "integer", "minimum": 0 },
+        "commits": { "type": "integer", "minimum": 0, "description": "git commits made through Claude Code, detected from Bash commands." }
       }
     },
     "activity": {
@@ -124,7 +125,7 @@
     "tools": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["builtin", "mcp"],
+      "required": ["builtin", "mcp", "editActions"],
       "properties": {
         "builtin": {
           "type": "array",
@@ -145,6 +146,33 @@
           "properties": {
             "totalCalls": { "type": "integer", "minimum": 0 },
             "servers": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "editActions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["byTool", "accepted", "rejected", "acceptanceRate"],
+          "description": "User acceptance of proposed edits, mirroring the Claude Code Analytics API tool-action metrics.",
+          "properties": {
+            "byTool": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["Edit", "MultiEdit", "Write", "NotebookEdit"],
+              "properties": {
+                "Edit": { "$ref": "#/definitions/editActionCounts" },
+                "MultiEdit": { "$ref": "#/definitions/editActionCounts" },
+                "Write": { "$ref": "#/definitions/editActionCounts" },
+                "NotebookEdit": { "$ref": "#/definitions/editActionCounts" }
+              }
+            },
+            "accepted": { "type": "integer", "minimum": 0 },
+            "rejected": { "type": "integer", "minimum": 0 },
+            "acceptanceRate": {
+              "type": ["number", "null"],
+              "minimum": 0,
+              "maximum": 1,
+              "description": "accepted / (accepted + rejected); null when no edit action was resolved."
+            }
           }
         }
       }
@@ -170,6 +198,15 @@
     }
   },
   "definitions": {
+    "editActionCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted", "rejected"],
+      "properties": {
+        "accepted": { "type": "integer", "minimum": 0 },
+        "rejected": { "type": "integer", "minimum": 0 }
+      }
+    },
     "lineBuckets": {
       "type": "object",
       "additionalProperties": false,

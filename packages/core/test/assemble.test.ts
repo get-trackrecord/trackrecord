@@ -25,7 +25,7 @@ describe("analyze() over the fixture corpus", () => {
 
   it("assembles source info per the manifest", async () => {
     const m = await run();
-    expect(m.schemaVersion).toBe("1.0.0");
+    expect(m.schemaVersion).toBe("1.1.0");
     expect(m.source.files).toBe(corpus.files);
     expect(m.source.records).toBe(corpus.parsedRecords);
     expect(m.source.ccVersionRange).toEqual(corpus.ccVersionRange);

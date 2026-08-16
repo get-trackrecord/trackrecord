@@ -79,6 +79,11 @@ export function renderSummary(metrics: Metrics): string {
       .join(" · ") || "—";
   const topTool = tools.builtin[0];
   const totalTokens = tokens.input + tokens.output + tokens.cacheRead + tokens.cacheCreation;
+  const accept = tools.editActions;
+  const acceptValue =
+    accept.acceptanceRate === null ? "—" : `${Math.round(accept.acceptanceRate * 100)}%`;
+  const acceptSub =
+    accept.acceptanceRate === null ? "" : `${formatCount(accept.accepted)}/${formatCount(accept.accepted + accept.rejected)} edits`;
 
   const lines: string[] = [
     TOP,
@@ -110,6 +115,8 @@ export function renderSummary(metrics: Metrics): string {
       topTool ? displayTool(topTool.name, 20) : "—",
       topTool ? `×${formatCount(topTool.count)}` : "",
     ),
+    ledger("commits", formatCount(delivery.commits), "made by Claude"),
+    ledger("edit accept rate", acceptValue, acceptSub),
     ledger("context ceiling", `${formatCount(activity.compactions)}× hit`),
     ledger(
       "total tokens",

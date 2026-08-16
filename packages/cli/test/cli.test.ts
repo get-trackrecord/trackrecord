@@ -19,7 +19,7 @@ describe("trackrecord --json (built binary)", () => {
   it("emits only valid schema JSON on stdout", async () => {
     const { stdout } = await run(process.execPath, [BIN, "--json", "--dir", FIXTURES]);
     const parsed = JSON.parse(stdout); // throws if stdout has anything else
-    expect(parsed.schemaVersion).toBe("1.0.0");
+    expect(parsed.schemaVersion).toBe("1.1.0");
     expect(parsed.activity.sessions).toBe(corpus.activity.sessions);
     expect(stdout).not.toContain(corpus.snapshotSentinel);
   });
